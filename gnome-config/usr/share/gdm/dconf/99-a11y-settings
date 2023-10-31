@@ -1,0 +1,4 @@
+# Hide accessibility menu on login screen
+[org/gnome/desktop/a11y]
+always-show-universal-access-status=false
+

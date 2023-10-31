@@ -1,0 +1,22 @@
+# Default Adwaita wallpaper
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/backgrounds/gnome/adwaita-l.webp'
+picture-uri-dark='file:///usr/share/backgrounds/gnome/adwaita-d.webp'
+
+# Enable touchpad tap for laptops
+[org/gnome/desktop/peripherals/touchpad]
+tap-to-click=true
+
+# Smaller icons in Nautilus
+[org/gnome/nautilus/icon-view]
+default-zoom-level='small'
+
+# File chooser improvements
+[org/gtk/gtk4/settings/file-chooser]
+show-hidden=false
+sort-directories-first=true
+
+# Restore window buttons
+[org/gnome/desktop/wm/preferences]
+button-layout='appmenu:minimize,maximize,close'
+
