@@ -1,0 +1,10 @@
+[Unit]
+Description="Backups"
+
+[Service]
+Restart=no
+User=root
+ExecStart=python3 /srv/scripts/backups/backups.py
+
+[Install]
+WantedBy=multi-user.target
