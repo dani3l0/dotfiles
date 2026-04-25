@@ -1,0 +1,10 @@
+[Unit]
+Description="libvirt addon scripts"
+
+[Service]
+Restart=no
+User=root
+ExecStart=python3 /srv/scripts/libvirtd-addons.py
+
+[Install]
+WantedBy=multi-user.target
