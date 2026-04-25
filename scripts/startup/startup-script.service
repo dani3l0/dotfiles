@@ -1,0 +1,9 @@
+[Unit]
+Description=Startup script
+
+[Service]
+Type=simple
+ExecStart=/srv/scripts/startup.sh
+
+[Install]
+WantedBy=multi-user.target
