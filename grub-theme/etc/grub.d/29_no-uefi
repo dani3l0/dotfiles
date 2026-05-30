@@ -1,0 +1,3 @@
+#!/usr/bin/sh
+set -e
+rm -f /etc/grub.d/30_uefi-firmware
