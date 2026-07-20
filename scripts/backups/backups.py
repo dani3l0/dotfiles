@@ -119,6 +119,7 @@ def make_offsite_backup():
 	subprocess.run(["umount", OFFSITE_PATH])
 	time.sleep(30)
 	subprocess.run(["hdparm", "-Y", f"/dev/disk/by-uuid/{OFFSITE_UUID}"])
+	notify("Offsite backup", "Disk has been unmounted and spundown. You can now remove it.")
 
 
 def make_btrfs_snapshot(path, snapshot_name, target=BACKUP_TARGET_PATH):
