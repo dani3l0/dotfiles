@@ -1,7 +1,5 @@
 import subprocess
 import time, os
-import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta
 
 ########################################### CONFIG ###########################################
@@ -25,9 +23,21 @@ IGNORES = ["*/.local/share/containers", "*/.cache"]				# Ignore those directorie
 
 # PUSH Notifications & Logger
 def notify(title, message):
-	subprocess.run(["curl", "-H", f"Tags: floppy_disk", "-H", f"Title: {title}", "-d", message, NTFY_URL])
+	subprocess.run(["curl", "-H", "Tags: floppy_disk", "-H", f"Title: {title}", "-d", message, NTFY_URL])
 	log(f"{title} | {message}")
 
+
+# Mounts drive with UUID to target path
+def mount_drive(uuid, mount_path):
+	log(f"Mounting drive {uuid} to {mount_path} ...")
+	result = subprocess.run(["mount", f"/dev/disk/by-uuid/{uuid}", mount_path])
+	if result.returncode == 0:
+		time.sleep(5)
+		log(f"Drive at {mount_path} mounted successfully!")
+		return True
+	log(f"Failed to mount drive {mount_path}")
+	notify("Backup failed", f"Failed to mount drive {mount_path}"):
+	return False
 
 # Make a backup of one
 def backup_storage(storage_path, backup_target_path=BACKUP_TARGET_PATH):
@@ -62,10 +72,10 @@ def spindown():
 
 # Make full backup
 def make_full_backup():
-	# Mount
-	log("Mounting backup drive...")
-	subprocess.run(["mount", f"/dev/disk/by-uuid/{BACKUP_TARGET_UUID}", BACKUP_TARGET_PATH])
-	time.sleep(30)
+	# Mount drive
+	ok = mount_drive(BACKUP_TARGET_UUID, BACKUP_TARGET_PATH)
+	if not ok:
+		return
 
 	# Check if the target directory exists, create it if not
 	backup_dir = os.path.join(BACKUP_TARGET_PATH, BACKUP_DIR)
@@ -83,7 +93,7 @@ def make_full_backup():
 	find_snapshots_older_than(PURGE_DAYS)
 
 	# Unmount & spindown HDDs
-	time.sleep(90)
+	time.sleep(60)
 	log("Unmounting backup drive...")
 	subprocess.run(["umount", BACKUP_TARGET_PATH])
 	time.sleep(30)
@@ -92,10 +102,13 @@ def make_full_backup():
 
 # Make offsite backup
 def make_offsite_backup():
-	log("Mounting offsite backup drive...")
-	subprocess.run(["mount", f"/dev/disk/by-uuid/{OFFSITE_UUID}", OFFSITE_PATH])
+	# Mount offsite drive
+	ok = mount_drive(OFFSITE_UUID, OFFSITE_PATH)
+	if not ok:
+		return
+
 	notify("Offsite backup", "An external disk for off-site backups has been detected. Backup process will begin shortly.")
-	time.sleep(30)
+	time.sleep(15)
 	if not os.path.islink(f"/dev/disk/by-uuid/{OFFSITE_UUID}"):
 		notify("Offsite backup", "Aborted. Disk had been turned off.")
 		return
@@ -110,9 +123,9 @@ def make_offsite_backup():
 		backup_storage(target, backup_target_path=OFFSITE_PATH)
 
 	# Make snapshot, delete olders
-	remove_offsite_snapshots()
 	snapshot_name = gen_snapshot_name()
 	make_btrfs_snapshot(backup_dir, snapshot_name, OFFSITE_PATH)
+	remove_offsite_snapshots()
 
 	# Unmount & Spindown
 	time.sleep(60)
@@ -123,21 +136,25 @@ def make_offsite_backup():
 
 
 def make_btrfs_snapshot(path, snapshot_name, target=BACKUP_TARGET_PATH):
-	log("Making snapshot {snapshot_name}...")
+	log(f"Making snapshot {snapshot_name}...")
 	subprocess.run(["btrfs", "subvolume", "snapshot", "-r", path, f"{target}/{snapshot_name}"])
 
 def gen_snapshot_name():
 	return datetime.now().strftime("%Y%m%d-%H%M%S")
 
-def remove_btrfs_snapshot(snapshot_name):
-	log("Removing snapshot {snapshot_name}...")
-	subprocess.run(["btrfs", "subvolume", "delete", f"{BACKUP_TARGET_PATH}/{snapshot_name}"])
+def remove_btrfs_snapshot(snapshot_name, target=BACKUP_TARGET_PATH):
+	log(f"Removing snapshot {snapshot_name}...")
+	subprocess.run(["btrfs", "subvolume", "delete", f"{target}/{snapshot_name}"])
 
 def remove_offsite_snapshots():
 	snaps = subprocess.run(["btrfs", "subvolume", "list", OFFSITE_PATH], capture_output=True, text=True, check=True).stdout.splitlines()
 	for snap in snaps[:-OFFSITE_SNAPSHOTS_COUNT]:
-		log(f"Removing offsite snapshot {snap} ...")
-		subprocess.run(["btrfs", "subvolume", "delete", f"{OFFSITE_PATH}/{snapshot_name}"])
+		fields = snap.split()
+		if not fields:
+			continue
+		snap_name = fields[-1]
+		log(f"Removing offsite snapshot {snap_name} ...")
+		remove_btrfs_snapshot(snap_name, OFFSITE_PATH)
 
 def snapshot_exists(snapshot_name):
 	snapshot_path = os.path.join(BACKUP_TARGET_PATH, snapshot_name)
@@ -149,12 +166,13 @@ def find_snapshots_older_than(days):
 	for snapshot in snapshots:
 		try:
 			snapshot_info = snapshot.split()
-			if len(snapshot_info) >= 8:
-				date_string = snapshot_info[8]
-				snapshot_date = datetime.strptime(date_string, "%Y%m%d-%H%M%S")
-				if snapshot_date < oldest_date:
-					log(f"Found old snapshot to be removed: {date_string}")
-					remove_btrfs_snapshot(snapshot_info[8])
+			if not snapshot_info:
+				continue
+			date_string = snapshot_info[-1]
+			snapshot_date = datetime.strptime(date_string, "%Y%m%d-%H%M%S")
+			if snapshot_date < oldest_date:
+				log(f"Found old snapshot to be removed: {date_string}")
+				remove_btrfs_snapshot(date_string)
 		except Exception as e:
 			log(f"Error occurred while managing old snapshots: {e}")
 
